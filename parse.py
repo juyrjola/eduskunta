@@ -1,6 +1,7 @@
 import glob
 import re
-from lxml import objectify
+import dateutil.parser
+from lxml import objectify, etree
 
 NSMAP = {
     'ns11': 'http://www.eduskunta.fi/skeemat/siirto/2011/09/07',
@@ -75,27 +76,66 @@ def replace_ns(s):
     return re.sub(r'^(\{.*\})', replace, s)
 
 
-def fix_attrib(elem):
-    ret = {replace_ns(key): val for key, val in elem.attrib.items()}
-    elem.attr = ret
-    return elem
+class SaneElement:
+    def __init__(self, el):
+        self.el = el
+
+    def __str__(self):
+        return str(replace_ns(self.el.tag))
+
+    def __repr__(self):
+        return self.__str__()
+
+    def xpath(self, path):
+        ret = list(self.el.xpath(path, namespaces=NSMAP))
+        assert len(ret) > 0, 'Path %s not found' % path
+
+        return [SaneElement(x) for x in list(ret)]
+
+    def xpathone(self, path):
+        ret = list(self.el.xpath(path, namespaces=NSMAP))
+        assert len(ret) == 1, 'Path %s not found' % path
+        return ret[0]
+
+    def find(self, path: str):
+        ret = self.el.find(path, namespaces=NSMAP)
+        if ret is not None:
+            return SaneElement(ret)
+        return None
+
+    def getchildren(self):
+        ret = self.el.getchildren()
+        return [SaneElement(x) for x in list(ret)]
+
+    @property
+    def text(self):
+        return self.el.text
+
+    @property
+    def attrib(self):
+        return {replace_ns(key): val for key, val in self.el.attrib.items()}
 
 
-def xpath(elem, path: str):
-    return [fix_attrib(x) for x in elem.xpath(path, namespaces=NSMAP)]
+class EduskuntaDoc:
+    def parse_date(self, s):
+        return dateutil.parser.parse(s)
+
+    def parse_common(self):
+        obj = self.doc.xpath('//jme:JulkaisuMetatieto')[0]
+        self.identifier = obj.attrib['met1:eduskuntaTunnus']
+        self.created_at = self.parse_date(obj.attrib['met1:laadintaPvm'])
+
+    def __init__(self, xmlstr: str):
+        self.doc = SaneElement(etree.fromstring(xmlstr))
+        self.parse_common()
 
 
-def find(elem, path: str):
-    ret = elem.find(path, namespaces=NSMAP)
-    if ret is not None:
-        return fix_attrib(ret)
+class PlenarySessionDoc(EduskuntaDoc):
+    def parse(self):
+        self.root = self.doc.xpathone('//ptk:Poytakirja')
+        print(self.root)
+        print(self.root.attrib)
 
 
-def findall(elem, path: str):
-    return [fix_attrib(x) for x in elem.findall(path, namespaces=NSMAP)]
-
-
-s = open('xml/GovernmentProposal_fi/2018/2018-11-16T10:21:27.749000+02:00.xml', 'r').read()
-doc = objectify.fromstring(s)
-obj = xpath(doc, '//jme:JulkaisuMetatieto')[0]
-print(obj.attr)
+s = open('xml/PlenarySessionMainPage_fi/2015/2015-01-09T15:54:03.624000+02:00.xml', 'r').read()
+doc = PlenarySessionDoc(s)
