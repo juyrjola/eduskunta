@@ -1,3 +1,4 @@
+from pprint import pprint
 import glob
 import re
 import dateutil.parser
@@ -95,7 +96,7 @@ class SaneElement:
     def xpathone(self, path):
         ret = list(self.el.xpath(path, namespaces=NSMAP))
         assert len(ret) == 1, 'Path %s not found' % path
-        return ret[0]
+        return SaneElement(ret[0])
 
     def find(self, path: str):
         ret = self.el.find(path, namespaces=NSMAP)
@@ -133,9 +134,11 @@ class EduskuntaDoc:
 class PlenarySessionDoc(EduskuntaDoc):
     def parse(self):
         self.root = self.doc.xpathone('//ptk:Poytakirja')
-        print(self.root)
-        print(self.root.attrib)
+        pprint(self.root)
+        pprint(self.root.attrib)
 
 
-s = open('xml/PlenarySessionMainPage_fi/2015/2015-01-09T15:54:03.624000+02:00.xml', 'r').read()
-doc = PlenarySessionDoc(s)
+if __name__ == '__main__':
+    s = open('xml/PlenarySessionMainPage_fi/2015/2015-01-09T15:54:03.624000+02:00.xml', 'r').read()
+    doc = PlenarySessionDoc(s)
+    doc.parse()
